@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+from faster_whisper import WhisperModel
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -8,7 +9,6 @@ from langchain_core.documents import Document
 from timer import timer_decorator
 import google.generativeai as genai
 from dotenv import load_dotenv
-from groq import Groq
 
 # Load environment variables from .env file
 load_dotenv()
@@ -30,25 +30,14 @@ if not GEMINI_API_KEY:
     )
 GEMINI_MODEL_NAME = "gemini-2.5-flash"  # Latest free-tier model
 
-# Groq API Configuration
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    raise ValueError(
-        "GROQ_API_KEY not found in environment variables. "
-        "Please create a .env file with GROQ_API_KEY=your-key-here"
-    )
-
 # Initialize Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
-# Initialize Groq
-groq_client = Groq(api_key=GROQ_API_KEY)
-
 @timer_decorator
 def transcribe_audio(audio_path, audio_filename):
     """
-    Transcribes audio file to text using Groq Whisper API.
+    Transcribes audio file to text using Faster Whisper.
     Returns transcription text.
     """
     # Create transcriptions directory if it doesn't exist
@@ -66,48 +55,29 @@ def transcribe_audio(audio_path, audio_filename):
         with open(transcription_file, "r", encoding="utf-8") as f:
             return f.read()
 
-    print(f"  🎙️  Transcribing via Groq API: {audio_filename}")
+    print(f"  🎙️  Transcribing: {audio_filename}")
     
     if not os.path.exists(audio_path):
         print(f"  ❌ Error: Audio file '{audio_path}' not found.")
         return None
 
-    try:
-        # Open audio file
-        with open(audio_path, "rb") as audio_file:
-            # Use Groq Whisper API for transcription
-            transcription = groq_client.audio.transcriptions.create(
-                file=(audio_filename, audio_file.read()),
-                model="whisper-large-v3-turbo",  # Groq's fastest Whisper model
-                response_format="verbose_json",  # Get detailed output with timestamps
-                temperature=0.0
-            )
-        
-        # Extract segments with timestamps
-        output_lines = []
-        if hasattr(transcription, 'segments') and transcription.segments:
-            for segment in transcription.segments:
-                start = segment.get('start', 0)
-                end = segment.get('end', 0)
-                text = segment.get('text', '')
-                line = f"[{start:.2f}s -> {end:.2f}s] {text}"
-                output_lines.append(line)
-        else:
-            # Fallback if no segments (shouldn't happen with verbose_json)
-            output_lines.append(f"[0.00s -> 0.00s] {transcription.text}")
-        
-        complete_text = "\n".join(output_lines)
-        
-        # Save transcription
-        with open(transcription_file, "w", encoding="utf-8") as f:
-            f.write(complete_text)
-        
-        print(f"  ✓ Saved: {transcription_file}")
-        return complete_text
-        
-    except Exception as e:
-        print(f"  ❌ Transcription failed: {e}")
-        return None
+    model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+    segments, info = model.transcribe(audio_path, beam_size=5)
+
+    print(f"  Language: {info.language} (Probability: {info.language_probability:.2f})")
+
+    output_lines = []
+    for segment in segments:
+        line = f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}"
+        output_lines.append(line)
+
+    complete_text = "\n".join(output_lines)
+
+    with open(transcription_file, "w", encoding="utf-8") as f:
+        f.write(complete_text)
+    
+    print(f"  ✓ Saved: {transcription_file}")
+    return complete_text
 
 @timer_decorator
 def chunk_text(text_content, source_filename):
