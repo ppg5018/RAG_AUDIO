@@ -1,0 +1,221 @@
+================================================================================
+                    RAG AUDIO API - USAGE GUIDE
+================================================================================
+
+📌 OVERVIEW
+-----------
+This FastAPI application provides REST endpoints to:
+1. Upload audio files (MP3/WAV) for transcription and embedding
+2. Query the uploaded audio content using natural language questions
+
+================================================================================
+🚀 STARTING THE API SERVER
+================================================================================
+
+Option 1: Using Uvicorn (Recommended)
+--------------------------------------
+uvicorn api:app --reload --host 0.0.0.0 --port 8000
+
+Option 2: Using Python with Uvicorn
+------------------------------------
+python3 -m uvicorn api:app --reload --host 0.0.0.0 --port 8000
+
+Flags:
+  --reload    : Auto-reload on code changes (development mode)
+  --host      : Server host (0.0.0.0 = accessible from network)
+  --port      : Server port (default: 8000)
+
+Once started, the API will be available at:
+  - Local:   http://localhost:8000
+  - Docs:    http://localhost:8000/docs (Interactive Swagger UI)
+  - ReDoc:   http://localhost:8000/redoc (Alternative documentation)
+
+================================================================================
+📡 API ENDPOINTS
+================================================================================
+
+1. POST /upload
+   Upload and process an audio file
+   
+   Request:
+   - Method: POST
+   - Content-Type: multipart/form-data
+   - Body: file (audio file - MP3/WAV)
+   
+   Response:
+   {
+     "message": "Success",
+     "chunks_created": 56
+   }
+
+2. POST /query
+   Ask questions about the uploaded audio
+   
+   Request:
+   - Method: POST
+   - Content-Type: application/json
+   - Body: {"question": "your question here"}
+   
+   Response:
+   {
+     "answer": "The answer based on audio content..."
+   }
+
+================================================================================
+💻 USAGE EXAMPLES
+================================================================================
+
+METHOD 1: Using cURL (Command Line)
+------------------------------------
+
+Step 1: Upload an audio file
+curl -X POST "http://localhost:8000/upload" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@jeffrey_interview.mp3"
+
+Step 2: Query the audio content
+curl -X POST "http://localhost:8000/query" \
+  -H "accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Who is Jeffrey?"}'
+
+
+METHOD 2: Using Python requests
+--------------------------------
+
+import requests
+
+# Step 1: Upload audio file
+with open("jeffrey_interview.mp3", "rb") as f:
+    response = requests.post(
+        "http://localhost:8000/upload",
+        files={"file": f}
+    )
+    print(response.json())
+
+# Step 2: Ask questions
+response = requests.post(
+    "http://localhost:8000/query",
+    json={"question": "Who is Jeffrey?"}
+)
+print(response.json())
+
+
+METHOD 3: Using JavaScript/Fetch
+---------------------------------
+
+// Step 1: Upload audio file
+const formData = new FormData();
+formData.append('file', audioFile);
+
+fetch('http://localhost:8000/upload', {
+  method: 'POST',
+  body: formData
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// Step 2: Query
+fetch('http://localhost:8000/query', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({question: 'Who is Jeffrey?'})
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+
+METHOD 4: Using Swagger UI (Easiest!)
+--------------------------------------
+
+1. Start the server
+2. Open http://localhost:8000/docs in your browser
+3. Click on an endpoint (e.g., POST /upload)
+4. Click "Try it out"
+5. Choose file or enter JSON
+6. Click "Execute"
+7. View the response below
+
+================================================================================
+🔍 TESTING THE API
+================================================================================
+
+Quick Test Script (test_api.py):
+---------------------------------
+
+import requests
+import time
+
+BASE_URL = "http://localhost:8000"
+
+# Test 1: Upload audio
+print("📤 Uploading audio file...")
+with open("jeffrey_interview.mp3", "rb") as f:
+    response = requests.post(f"{BASE_URL}/upload", files={"file": f})
+    print(f"✅ Upload: {response.json()}")
+
+time.sleep(1)
+
+# Test 2: Query
+questions = [
+    "Who is Jeffrey?",
+    "What happened in Milwaukee?",
+    "How many victims were there?"
+]
+
+for q in questions:
+    print(f"\n❓ Question: {q}")
+    response = requests.post(
+        f"{BASE_URL}/query",
+        json={"question": q}
+    )
+    print(f"💬 Answer: {response.json()['answer'][:200]}...")
+
+================================================================================
+⚠️ COMMON ISSUES & SOLUTIONS
+================================================================================
+
+Issue 1: "Upload a file first" error
+Solution: You must upload an audio file using /upload before using /query
+
+Issue 2: Port 8000 already in use
+Solution: Use a different port: uvicorn api:app --port 8001
+         Or kill the process: lsof -ti:8000 | xargs kill -9
+
+Issue 3: Module not found
+Solution: Install dependencies: pip3 install -r requirements.txt
+
+Issue 4: CORS errors (from web browser)
+Solution: Add CORS middleware to api.py:
+  from fastapi.middleware.cors import CORSMiddleware
+  app.add_middleware(CORSMiddleware, allow_origins=["*"])
+
+================================================================================
+🎯 WORKFLOW
+================================================================================
+
+1. Start API server:
+   uvicorn api:app --reload
+
+2. Upload audio file (one time):
+   POST /upload with your MP3/WAV file
+
+3. Ask questions (multiple times):
+   POST /query with different questions
+
+4. The API maintains state in memory:
+   - Transcription is saved in 'transcription.txt'
+   - Vector DB is stored in 'my_rag_db/'
+   - You can restart and re-query without re-uploading
+
+================================================================================
+📊 RESPONSE CODES
+================================================================================
+
+200 - Success
+400 - Bad Request (e.g., no file uploaded yet)
+422 - Validation Error (wrong request format)
+500 - Internal Server Error
+
+================================================================================
